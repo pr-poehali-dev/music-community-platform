@@ -15,6 +15,7 @@ interface User {
   display_name: string
   avatar_url: string
   bio: string
+  is_online?: boolean
 }
 
 interface Track {
@@ -99,13 +100,13 @@ function Index() {
   const [chats] = useState<Chat[]>([
     {
       id: 1,
-      user: { id: 2, username: 'beatmaker', display_name: 'BeatMaker', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=beatmaker', bio: '' },
+      user: { id: 2, username: 'beatmaker', display_name: 'BeatMaker', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=beatmaker', bio: '', is_online: true },
       lastMessage: 'Thanks! Working on more beats',
       unread: 0
     },
     {
       id: 2,
-      user: { id: 3, username: 'vocalize', display_name: 'Vocalize', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=vocalize', bio: '' },
+      user: { id: 3, username: 'vocalize', display_name: 'Vocalize', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=vocalize', bio: '', is_online: false },
       lastMessage: 'Absolutely! Let\'s do it',
       unread: 2
     }
@@ -123,7 +124,10 @@ function Index() {
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [newTrack, setNewTrack] = useState({ title: '', artist: '', file: null as File | null })
+  const [newTrack, setNewTrack] = useState({ title: '', artist: '', file: null as File | null, coverFile: null as File | null })
+  const [editProfileOpen, setEditProfileOpen] = useState(false)
+  const [newAvatar, setNewAvatar] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     const audio = new Audio()
@@ -199,8 +203,40 @@ function Index() {
     setNewMessage('')
   }
 
-  const handleUpload = () => {
+  const uploadImage = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = async () => {
+        try {
+          const base64Image = reader.result as string
+          const response = await fetch('https://functions.poehali.dev/1510f878-5b70-4e47-b71a-74ca9388657a', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Image })
+          })
+          const data = await response.json()
+          resolve(data.url)
+        } catch (error) {
+          reject(error)
+        }
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleUpload = async () => {
     if (!newTrack.title || !newTrack.artist) return
+    
+    setUploading(true)
+    let coverUrl = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400'
+    
+    if (newTrack.coverFile) {
+      try {
+        coverUrl = await uploadImage(newTrack.coverFile)
+      } catch (error) {
+        console.error('Failed to upload cover:', error)
+      }
+    }
     
     const track: Track = {
       id: Date.now(),
@@ -208,14 +244,30 @@ function Index() {
       title: newTrack.title,
       artist: newTrack.artist,
       audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-      cover_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400',
+      cover_url: coverUrl,
       isLiked: false,
       comments: []
     }
     
     setTracks([track, ...tracks])
-    setNewTrack({ title: '', artist: '', file: null })
+    setNewTrack({ title: '', artist: '', file: null, coverFile: null })
     setUploadDialogOpen(false)
+    setUploading(false)
+  }
+
+  const handleAvatarUpdate = async () => {
+    if (!newAvatar) return
+    
+    setUploading(true)
+    try {
+      const avatarUrl = await uploadImage(newAvatar)
+      console.log('New avatar URL:', avatarUrl)
+    } catch (error) {
+      console.error('Failed to upload avatar:', error)
+    }
+    setUploading(false)
+    setEditProfileOpen(false)
+    setNewAvatar(null)
   }
 
   return (
@@ -260,6 +312,16 @@ function Index() {
                       />
                     </div>
                     <div>
+                      <Label htmlFor="cover" className="text-foreground">Обложка трека (фото)</Label>
+                      <Input 
+                        id="cover"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setNewTrack({...newTrack, coverFile: e.target.files?.[0] || null})}
+                        className="bg-background border-border text-foreground mt-1"
+                      />
+                    </div>
+                    <div>
                       <Label htmlFor="file" className="text-foreground">MP3 файл</Label>
                       <Input 
                         id="file"
@@ -269,19 +331,53 @@ function Index() {
                         className="bg-background border-border text-foreground mt-1"
                       />
                     </div>
-                    <Button onClick={handleUpload} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                      Загрузить
+                    <Button onClick={handleUpload} disabled={uploading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                      {uploading ? 'Загрузка...' : 'Загрузить'}
                     </Button>
                   </div>
                 </DialogContent>
               </Dialog>
               
-              <Avatar className="h-10 w-10 border-2 border-primary">
-                <AvatarImage src={currentUser.avatar_url} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {currentUser.display_name[0]}
-                </AvatarFallback>
-              </Avatar>
+              <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
+                <DialogTrigger asChild>
+                  <button>
+                    <Avatar className="h-10 w-10 border-2 border-primary cursor-pointer hover:opacity-80 transition-opacity">
+                      <AvatarImage src={currentUser.avatar_url} />
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        {currentUser.display_name[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="bg-card border-border">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">Изменить аватар</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4">
+                    <div className="flex justify-center">
+                      <Avatar className="h-32 w-32 border-4 border-primary">
+                        <AvatarImage src={currentUser.avatar_url} />
+                        <AvatarFallback className="bg-primary text-primary-foreground text-4xl">
+                          {currentUser.display_name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <div>
+                      <Label htmlFor="avatar" className="text-foreground">Выбрать новое фото</Label>
+                      <Input 
+                        id="avatar"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setNewAvatar(e.target.files?.[0] || null)}
+                        className="bg-background border-border text-foreground mt-1"
+                      />
+                    </div>
+                    <Button onClick={handleAvatarUpdate} disabled={uploading || !newAvatar} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                      {uploading ? 'Загрузка...' : 'Сохранить'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -452,12 +548,17 @@ function Index() {
                           selectedChat?.id === chat.id ? 'bg-primary/20' : 'hover:bg-background'
                         }`}
                       >
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={chat.user.avatar_url} />
-                          <AvatarFallback className="bg-primary text-primary-foreground">
-                            {chat.user.display_name[0]}
-                          </AvatarFallback>
-                        </Avatar>
+                        <div className="relative">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src={chat.user.avatar_url} />
+                            <AvatarFallback className="bg-primary text-primary-foreground">
+                              {chat.user.display_name[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          {chat.user.is_online && (
+                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                          )}
+                        </div>
                         <div className="flex-1 text-left">
                           <p className="font-medium text-foreground">{chat.user.display_name}</p>
                           <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
@@ -477,15 +578,22 @@ function Index() {
                 {selectedChat ? (
                   <div className="flex flex-col h-[500px]">
                     <div className="flex items-center gap-3 pb-4 border-b border-border">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={selectedChat.user.avatar_url} />
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          {selectedChat.user.display_name[0]}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage src={selectedChat.user.avatar_url} />
+                          <AvatarFallback className="bg-primary text-primary-foreground">
+                            {selectedChat.user.display_name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        {selectedChat.user.is_online && (
+                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                        )}
+                      </div>
                       <div>
                         <p className="font-semibold text-foreground">{selectedChat.user.display_name}</p>
-                        <p className="text-sm text-muted-foreground">@{selectedChat.user.username}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedChat.user.is_online ? 'В сети' : 'Не в сети'}
+                        </p>
                       </div>
                     </div>
 
