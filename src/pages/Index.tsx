@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -49,74 +49,27 @@ interface Message {
   timestamp: string
 }
 
+const ALL_USERS: User[] = [
+  { id: 2, username: 'beatmaker', display_name: 'BeatMaker', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=beatmaker', bio: 'Creating beats since 2015', is_online: true },
+  { id: 3, username: 'vocalize', display_name: 'Vocalize', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=vocalize', bio: 'Singer & Songwriter', is_online: false },
+  { id: 4, username: 'synthwave', display_name: 'SynthWave', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=synthwave', bio: 'Retro vibes producer', is_online: true },
+  { id: 5, username: 'bassline', display_name: 'BassLine', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=bassline', bio: 'Bass music lover', is_online: true },
+  { id: 6, username: 'melody', display_name: 'MelodyQueen', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=melody', bio: 'Piano & vocals', is_online: false },
+]
+
 function Index() {
-  const [currentUser] = useState<User>({
-    id: 1,
-    username: 'djmax',
-    display_name: 'DJ Max',
-    avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=djmax',
-    bio: 'Music producer & DJ'
-  })
-
-  const [tracks, setTracks] = useState<Track[]>([
-    {
-      id: 1,
-      user_id: 1,
-      title: 'Summer Vibes',
-      artist: 'DJ Max',
-      audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-      cover_url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400',
-      isLiked: false,
-      comments: [
-        {
-          id: 1,
-          user: { id: 2, username: 'beatmaker', display_name: 'BeatMaker', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=beatmaker', bio: '' },
-          content: 'Amazing track! Love the vibe 🔥'
-        }
-      ]
-    },
-    {
-      id: 2,
-      user_id: 2,
-      title: 'Night City',
-      artist: 'BeatMaker',
-      audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-      cover_url: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400',
-      isLiked: true,
-      comments: []
-    },
-    {
-      id: 3,
-      user_id: 3,
-      title: 'Ocean Dreams',
-      artist: 'Vocalize',
-      audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-      cover_url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400',
-      isLiked: false,
-      comments: []
-    }
-  ])
-
-  const [chats] = useState<Chat[]>([
-    {
-      id: 1,
-      user: { id: 2, username: 'beatmaker', display_name: 'BeatMaker', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=beatmaker', bio: '', is_online: true },
-      lastMessage: 'Thanks! Working on more beats',
-      unread: 0
-    },
-    {
-      id: 2,
-      user: { id: 3, username: 'vocalize', display_name: 'Vocalize', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=vocalize', bio: '', is_online: false },
-      lastMessage: 'Absolutely! Let\'s do it',
-      unread: 2
-    }
-  ])
-
+  const [isRegistered, setIsRegistered] = useState(false)
+  const [showRegistration, setShowRegistration] = useState(true)
+  const [registrationData, setRegistrationData] = useState({ username: '', display_name: '' })
+  
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [tracks, setTracks] = useState<Track[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [userSearchQuery, setUserSearchQuery] = useState('')
+  
+  const [chats, setChats] = useState<Chat[]>([])
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 1, sender_id: 1, content: 'Hey! Love your new track!', timestamp: '10:30' },
-    { id: 2, sender_id: 2, content: 'Thanks! Working on more beats', timestamp: '10:32' }
-  ])
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null)
@@ -128,6 +81,16 @@ function Index() {
   const [editProfileOpen, setEditProfileOpen] = useState(false)
   const [newAvatar, setNewAvatar] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('tsound_user')
+    if (saved) {
+      const user = JSON.parse(saved)
+      setCurrentUser(user)
+      setIsRegistered(true)
+      setShowRegistration(false)
+    }
+  }, [])
 
   useEffect(() => {
     const audio = new Audio()
@@ -150,9 +113,22 @@ function Index() {
     }
   }, [currentTrack, isPlaying, audioElement])
 
-  const getLikesCount = (trackId: number) => {
-    const track = tracks.find(t => t.id === trackId)
-    return track ? tracks.filter(t => t.isLiked && t.id === trackId).length : 0
+  const handleRegistration = () => {
+    if (!registrationData.username || !registrationData.display_name) return
+    
+    const user: User = {
+      id: 1,
+      username: registrationData.username,
+      display_name: registrationData.display_name,
+      avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${registrationData.username}`,
+      bio: 'Новый пользователь TSound',
+      is_online: true
+    }
+    
+    localStorage.setItem('tsound_user', JSON.stringify(user))
+    setCurrentUser(user)
+    setIsRegistered(true)
+    setShowRegistration(false)
   }
 
   const toggleLike = (trackId: number) => {
@@ -164,7 +140,7 @@ function Index() {
   }
 
   const addComment = (trackId: number, content: string) => {
-    if (!content.trim()) return
+    if (!content.trim() || !currentUser) return
     
     setTracks(tracks.map(track => 
       track.id === trackId 
@@ -190,7 +166,7 @@ function Index() {
   }
 
   const sendMessage = () => {
-    if (!newMessage.trim() || !selectedChat) return
+    if (!newMessage.trim() || !selectedChat || !currentUser) return
     
     const message: Message = {
       id: Date.now(),
@@ -225,7 +201,7 @@ function Index() {
   }
 
   const handleUpload = async () => {
-    if (!newTrack.title || !newTrack.artist) return
+    if (!newTrack.title || !newTrack.artist || !currentUser) return
     
     setUploading(true)
     let coverUrl = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400'
@@ -256,12 +232,14 @@ function Index() {
   }
 
   const handleAvatarUpdate = async () => {
-    if (!newAvatar) return
+    if (!newAvatar || !currentUser) return
     
     setUploading(true)
     try {
       const avatarUrl = await uploadImage(newAvatar)
-      console.log('New avatar URL:', avatarUrl)
+      const updatedUser = { ...currentUser, avatar_url: avatarUrl }
+      setCurrentUser(updatedUser)
+      localStorage.setItem('tsound_user', JSON.stringify(updatedUser))
     } catch (error) {
       console.error('Failed to upload avatar:', error)
     }
@@ -269,6 +247,81 @@ function Index() {
     setEditProfileOpen(false)
     setNewAvatar(null)
   }
+
+  const startChat = (user: User) => {
+    const existingChat = chats.find(c => c.user.id === user.id)
+    if (existingChat) {
+      setSelectedChat(existingChat)
+    } else {
+      const newChat: Chat = {
+        id: Date.now(),
+        user: user,
+        lastMessage: '',
+        unread: 0
+      }
+      setChats([newChat, ...chats])
+      setSelectedChat(newChat)
+      setMessages([])
+    }
+  }
+
+  const filteredTracks = tracks.filter(track => 
+    track.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    track.artist.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const filteredUsers = ALL_USERS.filter(user => 
+    user.display_name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    user.username.toLowerCase().includes(userSearchQuery.toLowerCase())
+  )
+
+  if (showRegistration) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-8 bg-card border-border">
+          <div className="text-center mb-8">
+            <img src="https://cdn.poehali.dev/files/2ab35a3e-2c21-4cfb-bee7-7bb9d2d42f71.jpg" alt="TSound" className="h-16 mx-auto mb-4" />
+            <h1 className="text-3xl font-bold text-foreground mb-2">Добро пожаловать в TSound</h1>
+            <p className="text-muted-foreground">Создай свой профиль и начни делиться музыкой</p>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="username" className="text-foreground">Имя пользователя</Label>
+              <Input 
+                id="username"
+                value={registrationData.username}
+                onChange={(e) => setRegistrationData({...registrationData, username: e.target.value})}
+                placeholder="@username"
+                className="bg-background border-border text-foreground mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="display_name" className="text-foreground">Отображаемое имя</Label>
+              <Input 
+                id="display_name"
+                value={registrationData.display_name}
+                onChange={(e) => setRegistrationData({...registrationData, display_name: e.target.value})}
+                placeholder="Ваше имя"
+                className="bg-background border-border text-foreground mt-1"
+              />
+            </div>
+            
+            <Button 
+              onClick={handleRegistration} 
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={!registrationData.username || !registrationData.display_name}
+            >
+              Начать
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!currentUser) return null
 
   return (
     <div className="min-h-screen bg-background">
@@ -281,11 +334,9 @@ function Index() {
             
             <div className="flex items-center gap-3">
               <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="icon" className="rounded-full bg-primary hover:bg-primary/90">
-                    <Icon name="Plus" size={24} />
-                  </Button>
-                </DialogTrigger>
+                <Button onClick={() => setUploadDialogOpen(true)} size="icon" className="rounded-full bg-primary hover:bg-primary/90">
+                  <Icon name="Plus" size={24} />
+                </Button>
                 <DialogContent className="bg-card border-border">
                   <DialogHeader>
                     <DialogTitle className="text-foreground">Загрузить трек</DialogTitle>
@@ -339,16 +390,14 @@ function Index() {
               </Dialog>
               
               <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
-                <DialogTrigger asChild>
-                  <button>
-                    <Avatar className="h-10 w-10 border-2 border-primary cursor-pointer hover:opacity-80 transition-opacity">
-                      <AvatarImage src={currentUser.avatar_url} />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {currentUser.display_name[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
-                </DialogTrigger>
+                <button onClick={() => setEditProfileOpen(true)}>
+                  <Avatar className="h-10 w-10 border-2 border-primary cursor-pointer hover:opacity-80 transition-opacity">
+                    <AvatarImage src={currentUser.avatar_url} />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {currentUser.display_name[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
                 <DialogContent className="bg-card border-border">
                   <DialogHeader>
                     <DialogTitle className="text-foreground">Изменить аватар</DialogTitle>
@@ -401,82 +450,102 @@ function Index() {
           </TabsList>
 
           <TabsContent value="feed" className="space-y-6">
-            {tracks.map((track) => (
-              <Card key={track.id} className="p-6 bg-card border-border animate-fade-in">
-                <div className="flex gap-4">
-                  <img 
-                    src={track.cover_url} 
-                    alt={track.title}
-                    className="w-32 h-32 rounded-lg object-cover"
-                  />
-                  
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-foreground mb-1">{track.title}</h3>
-                    <p className="text-muted-foreground mb-3">{track.artist}</p>
-                    
-                    <div className="flex items-center gap-3 mb-4">
-                      <Button 
-                        size="icon" 
-                        variant="ghost"
-                        onClick={() => playTrack(track)}
-                        className="hover:bg-primary/20"
-                      >
-                        <Icon name={currentTrack?.id === track.id && isPlaying ? "Pause" : "Play"} size={24} className="text-primary" />
-                      </Button>
-                      
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => toggleLike(track.id)}
-                        className={`gap-2 ${track.isLiked ? 'text-primary' : 'text-muted-foreground'} hover:text-primary`}
-                      >
-                        <Icon name="Heart" size={20} className={track.isLiked ? 'fill-current' : ''} />
-                        {track.isLiked ? 1 : 0}
-                      </Button>
-                      
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        className="gap-2 text-muted-foreground hover:text-primary"
-                      >
-                        <Icon name="MessageCircle" size={20} />
-                        {track.comments.length}
-                      </Button>
-                    </div>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="relative flex-1">
+                <Icon name="Search" size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Поиск треков..."
+                  className="bg-card border-border text-foreground pl-10"
+                />
+              </div>
+            </div>
 
-                    <div className="space-y-3">
-                      {track.comments.map((comment) => (
-                        <div key={comment.id} className="flex gap-3 bg-background/50 rounded-lg p-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={comment.user.avatar_url} />
-                            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                              {comment.user.display_name[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{comment.user.display_name}</p>
-                            <p className="text-sm text-muted-foreground">{comment.content}</p>
-                          </div>
-                        </div>
-                      ))}
+            {filteredTracks.length === 0 ? (
+              <Card className="p-12 bg-card border-border text-center">
+                <Icon name="Music" size={64} className="mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground text-lg">Пока нет треков</p>
+                <p className="text-muted-foreground text-sm mt-2">Нажми "+" чтобы загрузить свою музыку</p>
+              </Card>
+            ) : (
+              filteredTracks.map((track) => (
+                <Card key={track.id} className="p-6 bg-card border-border animate-fade-in">
+                  <div className="flex gap-4">
+                    <img 
+                      src={track.cover_url} 
+                      alt={track.title}
+                      className="w-32 h-32 rounded-lg object-cover"
+                    />
+                    
+                    <div className="flex-1">
+                      <h3 className="text-xl font-semibold text-foreground mb-1">{track.title}</h3>
+                      <p className="text-muted-foreground mb-3">{track.artist}</p>
                       
-                      <div className="flex gap-2">
-                        <Input 
-                          placeholder="Написать комментарий..."
-                          className="bg-background border-border text-foreground"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              addComment(track.id, e.currentTarget.value)
-                              e.currentTarget.value = ''
-                            }
-                          }}
-                        />
+                      <div className="flex items-center gap-3 mb-4">
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          onClick={() => playTrack(track)}
+                          className="hover:bg-primary/20"
+                        >
+                          <Icon name={currentTrack?.id === track.id && isPlaying ? "Pause" : "Play"} size={24} className="text-primary" />
+                        </Button>
+                        
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => toggleLike(track.id)}
+                          className={`gap-2 ${track.isLiked ? 'text-primary' : 'text-muted-foreground'} hover:text-primary`}
+                        >
+                          <Icon name="Heart" size={20} className={track.isLiked ? 'fill-current' : ''} />
+                          {track.isLiked ? 1 : 0}
+                        </Button>
+                        
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          className="gap-2 text-muted-foreground hover:text-primary"
+                        >
+                          <Icon name="MessageCircle" size={20} />
+                          {track.comments.length}
+                        </Button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {track.comments.map((comment) => (
+                          <div key={comment.id} className="flex gap-3 bg-background/50 rounded-lg p-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={comment.user.avatar_url} />
+                              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                                {comment.user.display_name[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{comment.user.display_name}</p>
+                              <p className="text-sm text-muted-foreground">{comment.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        <div className="flex gap-2">
+                          <Input 
+                            placeholder="Написать комментарий..."
+                            className="bg-background border-border text-foreground"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                addComment(track.id, e.currentTarget.value)
+                                e.currentTarget.value = ''
+                              }
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))
+            )}
           </TabsContent>
 
           <TabsContent value="profile">
@@ -498,38 +567,42 @@ function Index() {
                   <p className="text-sm text-muted-foreground">Треков</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-primary">1.2K</p>
+                  <p className="text-3xl font-bold text-primary">0</p>
                   <p className="text-sm text-muted-foreground">Подписчики</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-primary">256</p>
+                  <p className="text-3xl font-bold text-primary">0</p>
                   <p className="text-sm text-muted-foreground">Подписки</p>
                 </div>
               </div>
               
               <div className="mt-8">
                 <h3 className="text-xl font-semibold text-foreground mb-4">Мои треки</h3>
-                <div className="space-y-4">
-                  {tracks.filter(t => t.user_id === currentUser.id).map((track) => (
-                    <div key={track.id} className="flex items-center gap-4 p-4 bg-background rounded-lg">
-                      <img src={track.cover_url} alt={track.title} className="w-16 h-16 rounded" />
-                      <div className="flex-1 text-left">
-                        <p className="font-medium text-foreground">{track.title}</p>
-                        <p className="text-sm text-muted-foreground">{track.artist}</p>
-                      </div>
-                      <div className="flex items-center gap-4 text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Icon name="Heart" size={16} />
-                          <span className="text-sm">{track.isLiked ? 1 : 0}</span>
+                {tracks.filter(t => t.user_id === currentUser.id).length === 0 ? (
+                  <p className="text-muted-foreground">У вас пока нет треков</p>
+                ) : (
+                  <div className="space-y-4">
+                    {tracks.filter(t => t.user_id === currentUser.id).map((track) => (
+                      <div key={track.id} className="flex items-center gap-4 p-4 bg-background rounded-lg">
+                        <img src={track.cover_url} alt={track.title} className="w-16 h-16 rounded" />
+                        <div className="flex-1 text-left">
+                          <p className="font-medium text-foreground">{track.title}</p>
+                          <p className="text-sm text-muted-foreground">{track.artist}</p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Icon name="MessageCircle" size={16} />
-                          <span className="text-sm">{track.comments.length}</span>
+                        <div className="flex items-center gap-4 text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Icon name="Heart" size={16} />
+                            <span className="text-sm">{track.isLiked ? 1 : 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Icon name="MessageCircle" size={16} />
+                            <span className="text-sm">{track.comments.length}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           </TabsContent>
@@ -537,37 +610,42 @@ function Index() {
           <TabsContent value="chats">
             <div className="grid md:grid-cols-3 gap-4">
               <Card className="md:col-span-1 p-4 bg-card border-border animate-fade-in">
-                <h3 className="text-lg font-semibold text-foreground mb-4">Чаты</h3>
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-foreground mb-3">Все пользователи</h3>
+                  <div className="relative">
+                    <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input 
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Поиск пользователей..."
+                      className="bg-background border-border text-foreground pl-9 text-sm"
+                    />
+                  </div>
+                </div>
+                
                 <ScrollArea className="h-[500px]">
                   <div className="space-y-2">
-                    {chats.map((chat) => (
+                    {filteredUsers.map((user) => (
                       <button
-                        key={chat.id}
-                        onClick={() => setSelectedChat(chat)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                          selectedChat?.id === chat.id ? 'bg-primary/20' : 'hover:bg-background'
-                        }`}
+                        key={user.id}
+                        onClick={() => startChat(user)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg transition-colors hover:bg-background"
                       >
                         <div className="relative">
                           <Avatar className="h-12 w-12">
-                            <AvatarImage src={chat.user.avatar_url} />
+                            <AvatarImage src={user.avatar_url} />
                             <AvatarFallback className="bg-primary text-primary-foreground">
-                              {chat.user.display_name[0]}
+                              {user.display_name[0]}
                             </AvatarFallback>
                           </Avatar>
-                          {chat.user.is_online && (
+                          {user.is_online && (
                             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
                           )}
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-foreground">{chat.user.display_name}</p>
-                          <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
+                          <p className="font-medium text-foreground">{user.display_name}</p>
+                          <p className="text-sm text-muted-foreground">@{user.username}</p>
                         </div>
-                        {chat.unread > 0 && (
-                          <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                            {chat.unread}
-                          </div>
-                        )}
                       </button>
                     ))}
                   </div>
@@ -636,7 +714,7 @@ function Index() {
                   <div className="h-[500px] flex items-center justify-center text-muted-foreground">
                     <div className="text-center">
                       <Icon name="MessageCircle" size={64} className="mx-auto mb-4 opacity-50" />
-                      <p>Выберите чат для начала общения</p>
+                      <p>Выберите пользователя для начала общения</p>
                     </div>
                   </div>
                 )}
