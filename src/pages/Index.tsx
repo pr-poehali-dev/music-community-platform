@@ -47,6 +47,9 @@ interface Message {
   sender_id: number
   content: string
   timestamp: string
+  type?: 'text' | 'voice'
+  voiceUrl?: string
+  duration?: number
 }
 
 const ALL_USERS: User[] = [
@@ -63,9 +66,15 @@ function Index() {
   const [registrationData, setRegistrationData] = useState({ username: '', display_name: '' })
   
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [tracks, setTracks] = useState<Track[]>([])
+  const [tracks, setTracks] = useState<Track[]>(() => {
+    const saved = localStorage.getItem('tsound_tracks')
+    return saved ? JSON.parse(saved) : []
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [userSearchQuery, setUserSearchQuery] = useState('')
+  const [isRecording, setIsRecording] = useState(false)
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
+  const [recordingTime, setRecordingTime] = useState(0)
   
   const [chats, setChats] = useState<Chat[]>([])
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
@@ -101,6 +110,20 @@ function Index() {
       audio.src = ''
     }
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem('tsound_tracks', JSON.stringify(tracks))
+  }, [tracks])
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+    }
+    return () => clearInterval(interval)
+  }, [isRecording])
 
   useEffect(() => {
     if (audioElement && currentTrack) {
@@ -172,11 +195,55 @@ function Index() {
       id: Date.now(),
       sender_id: currentUser.id,
       content: newMessage,
-      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+      type: 'text'
     }
     
     setMessages([...messages, message])
     setNewMessage('')
+  }
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      const chunks: Blob[] = []
+
+      recorder.ondataavailable = (e) => chunks.push(e.data)
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' })
+        const url = URL.createObjectURL(blob)
+        
+        if (currentUser) {
+          const message: Message = {
+            id: Date.now(),
+            sender_id: currentUser.id,
+            content: 'Голосовое сообщение',
+            timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+            type: 'voice',
+            voiceUrl: url,
+            duration: recordingTime
+          }
+          setMessages([...messages, message])
+        }
+        
+        stream.getTracks().forEach(track => track.stop())
+        setRecordingTime(0)
+      }
+
+      recorder.start()
+      setMediaRecorder(recorder)
+      setIsRecording(true)
+    } catch (error) {
+      console.error('Error accessing microphone:', error)
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop()
+      setIsRecording(false)
+    }
   }
 
   const uploadImage = async (file: File): Promise<string> => {
@@ -689,7 +756,15 @@ function Index() {
                                   : 'bg-background text-foreground'
                               }`}
                             >
-                              <p>{msg.content}</p>
+                              {msg.type === 'voice' && msg.voiceUrl ? (
+                                <div className="flex items-center gap-2">
+                                  <Icon name="Mic" size={20} />
+                                  <audio src={msg.voiceUrl} controls className="h-8" />
+                                  <span className="text-xs">{msg.duration}s</span>
+                                </div>
+                              ) : (
+                                <p>{msg.content}</p>
+                              )}
                               <p className="text-xs opacity-70 mt-1">{msg.timestamp}</p>
                             </div>
                           </div>
@@ -698,16 +773,35 @@ function Index() {
                     </ScrollArea>
 
                     <div className="flex gap-2 pt-4 border-t border-border">
-                      <Input
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                        placeholder="Написать сообщение..."
-                        className="bg-background border-border text-foreground"
-                      />
-                      <Button onClick={sendMessage} size="icon" className="bg-primary hover:bg-primary/90">
-                        <Icon name="Send" size={20} />
-                      </Button>
+                      {isRecording ? (
+                        <div className="flex items-center gap-2 flex-1 bg-background rounded-lg px-4 py-2 border border-border">
+                          <Icon name="Mic" size={20} className="text-red-500 animate-pulse" />
+                          <span className="text-foreground">Запись... {recordingTime}s</span>
+                        </div>
+                      ) : (
+                        <Input
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                          placeholder="Написать сообщение..."
+                          className="bg-background border-border text-foreground"
+                        />
+                      )}
+                      
+                      {isRecording ? (
+                        <Button onClick={stopRecording} size="icon" className="bg-red-500 hover:bg-red-600">
+                          <Icon name="Square" size={20} />
+                        </Button>
+                      ) : (
+                        <>
+                          <Button onClick={startRecording} size="icon" variant="ghost" className="hover:bg-primary/20">
+                            <Icon name="Mic" size={20} className="text-primary" />
+                          </Button>
+                          <Button onClick={sendMessage} size="icon" className="bg-primary hover:bg-primary/90">
+                            <Icon name="Send" size={20} />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ) : (
